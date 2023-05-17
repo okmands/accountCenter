@@ -1,0 +1,65 @@
+project:
+   code: 椒图
+   name: 账号中台
+   charset: utf-8
+
+server:
+   port: 8080
+
+info:
+   name: "@project.artifactId@"
+   description: "@project.description@"
+   version: "@project.version@"
+  
+spring:
+   application:
+      name: "@project.artifactId@"
+   output:
+      ansi:
+         enabled: always
+   datasource:
+       account:
+         driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+         jdbc-url: jdbc:sqlserver://192.168.7.196:1433;databaseName=accounts
+         username: sa
+         password: C0f0828471b64498e053b407a8c0efe9
+       hr:
+         driver-class-name: oracle.jdbc.OracleDriver
+         jdbc-url: jdbc:oracle:thin:@192.168.7.144:1521:orcl
+         username: hr
+         password: IEjDJPN5wWZTBH65
+   hikari:
+      minimum-idle: 3
+      maximum-pool-size: 10
+      max-lifetime: 30000   #不能小于30秒，否则默认回到1800秒
+      connection-test-query: select 1
+   boot:
+      admin:
+         client:
+            url: http://sba.xiya3333.com:8080/sbadmin
+            username: admin
+            password: admin
+            instance:
+               name: 椒图账号中台
+               service-base-url: http://${localhost}:${server.port}/
+
+mybatis:
+   mapper-locations: classpath:*/mapper/*.*
+   type-aliases-package: com.xiya.accounts.pojo
+
+logging:
+   level:
+      com.xiya.accounts: info
+   file:
+      name: ../logs/${spring.application.name}.log
+   pattern:
+      file: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%5p) %clr(${PID}){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx"
+
+management:
+   endpoints:
+      web:
+         exposure:
+            include: "*"
+   endpoint:
+      health:
+         show-details: always

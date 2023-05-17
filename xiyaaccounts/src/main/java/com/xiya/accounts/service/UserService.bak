@@ -1,0 +1,130 @@
+package com.xiya.accounts.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.xiya.accounts.comm.PasswordUtil;
+import com.xiya.accounts.mapper.account.*;
+import com.xiya.accounts.mapper.hr.PersonMapper;
+import com.xiya.accounts.pojo.System;
+import com.xiya.accounts.pojo.*;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import javax.annotation.Resource;
+import java.time.LocalDateTime;
+import java.util.Date;
+import java.util.List;
+
+@Service
+public class UserServiceBak {
+    @Resource
+    private AccountsMapper accountsMapper;
+    @Resource
+    private AccountSystemMapper accountSystemMapper;
+    @Resource
+    private PersonMapper personMapper;
+    @Resource
+    private AccountLogMapper accountLogMapper;
+    @Resource
+    private SystemMapper systemMapper;
+    @Resource
+    private AccountTokenMapper accountTokenMapper;
+
+    public String checkLogin(String loginid, String password, String syscode) {
+        String result = "";
+        //取系统信息
+        QueryWrapper<System> systemQuery = new QueryWrapper<>();
+        systemQuery.eq("syscode", syscode);
+        System system = systemMapper.selectOne(systemQuery);
+        if (system.getStatus().equals("1")) {
+            result = "系统维护中,请稍后再试";
+        } else if (system.getStatus().equals("2")) {
+            result = "系统故障,请稍后再试";
+        } else {
+            //取账号信息
+            QueryWrapper<Accounts> accountsQuery = new QueryWrapper<>();
+            accountsQuery.eq("loginid", loginid);
+            Accounts accounts = accountsMapper.selectOne(accountsQuery);
+            //取授权系统
+            QueryWrapper<AccountSystem> accountSystemQuery = new QueryWrapper<>();
+            accountSystemQuery.eq("loginid", loginid);
+            List<AccountSystem> accountSystemList = accountSystemMapper.selectList(accountSystemQuery);
+
+            if (accounts == null) {
+                insertAccountLog(loginid, "未找到该账号", "登录", syscode);
+                result = "未找到该账号";
+            } else {
+                Person person = personMapper.getPerson(accounts.getWorkid());
+                if (person.getAccountLock().equals("1")) {
+                    if (person.getStatus().equals("90") || person.getStatus().equals("-90")) {
+                        accountsMapper.delete(accountsQuery);
+                        accountSystemMapper.delete(accountSystemQuery);
+                    }
+                } else if (person.getAccountLock().equals("0") && (person.getStatus().equals("65") || person.getStatus().equals("68"))) {
+                    if (new Date().compareTo(accounts.getEnddate()) > 0) {
+                        insertAccountLog(loginid, "账号已过有效期", "登录", syscode);
+                        result = "账号已过有效期";
+                    } else {
+                        if (!accounts.getPwd().equals(PasswordUtil.genPassword(loginid, password))) {
+                            insertAccountLog(loginid, "登录密码错误", "登录", syscode);
+                            result = "账号登录口令错误";
+                        } else {
+                            if (accountSystemList.stream().filter(a -> a.getSysname().equals(syscode)).count() == 0) {
+                                insertAccountLog(loginid, "登录未授权系统", "登录", syscode);
+                                result = "未授权登录此系统";
+                            } else {
+                                insertAccountLog(loginid, "登录成功", "登录", syscode);
+                                result = "0";
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void insertAccountLog(String loginid, String actionContent, String action, String syscode) {
+        AccountLog accountLog = new AccountLog();
+        accountLog.setLoginid(loginid);
+        accountLog.setActionContent(actionContent);
+        accountLog.setSyscode(syscode);
+        accountLog.setAction(action);
+        accountLog.setActionTime(LocalDateTime.now());
+        accountLogMapper.insert(accountLog);
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void saveAccountToken(String loginid, String token, LocalDateTime expire){
+        AccountToken accountToken = new AccountToken();
+        accountToken.setToken(token);
+        accountToken.setExpire(expire);
+        accountToken.setLoginid(loginid);
+        accountTokenMapper.insert(accountToken);
+    }
+
+    public void delAccountTokenByLoginid(String loginid){
+        QueryWrapper<AccountToken> accountToken = new QueryWrapper<>();
+        accountToken.eq("loginid",loginid);
+        accountTokenMapper.delete(accountToken);
+    }
+
+    public void cleanAccountToken(String token){
+        QueryWrapper<AccountToken> accountToken = new QueryWrapper<>();
+        accountToken.eq("token",token);
+        accountTokenMapper.delete(accountToken);
+    }
+
+    public AccountSystem authLoginToken(String token, String sysname){
+        QueryWrapper<AccountToken> accountTokenQuery = new QueryWrapper<>();
+        accountTokenQuery.eq("token",token);
+        AccountToken accountToken = accountTokenMapper.selectOne(accountTokenQuery);
+        if(accountToken != null && sysname != null){
+            QueryWrapper<AccountSystem> accountSystemQuery = new QueryWrapper<>();
+            accountSystemQuery.eq("loginid",accountToken.getLoginid());
+            accountSystemQuery.eq("sysname",sysname);
+            return accountSystemMapper.selectOne(accountSystemQuery);
+        }
+        return null;
+    }
+}

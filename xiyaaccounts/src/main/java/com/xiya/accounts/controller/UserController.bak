@@ -1,0 +1,68 @@
+package com.xiya.accounts.controller;
+
+import com.alibaba.fastjson.JSONObject;
+import com.xiya.accounts.comm.JwtTokenUtil;
+import com.xiya.accounts.comm.PasswordUtil;
+import com.xiya.accounts.comm.Result;
+import com.xiya.accounts.service.UserService;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/manage/login")
+public class UserController {
+    @Resource
+    private UserService userService;
+
+    @PostMapping(value = "checkLogin")
+    public String checkLogin(@RequestBody JSONObject jsonObject){
+        String loginid = jsonObject.getString("loginid");
+        String password = jsonObject.getString("password");
+        String syscode = jsonObject.getString("syscode");
+        if(jsonObject.get("loginid") == null || jsonObject.getString("password") == null || jsonObject.getString("syscode") == null){
+            return Result.toFail("缺少必要参数");
+        }
+        try {
+            String result = userService.checkLogin(loginid,password,syscode);
+            if(result.equals("0")){
+                HashMap<String,Object> headMap = new HashMap<>();
+                HashMap<String,String> claimMap = new HashMap<>();
+                claimMap.put("loginid",loginid);
+                claimMap.put("password",PasswordUtil.genPassword(loginid,password));
+                String signStr = JwtTokenUtil.getSign(headMap,claimMap,8);
+                Map<String,Object> map = new HashMap<>();
+                map.put("token",signStr);
+                //将token写入到数据库
+                userService.delAccountTokenByLoginid(loginid);
+                userService.saveAccountToken(loginid,signStr, LocalDateTime.now().plus(8, ChronoUnit.HOURS));
+                return Result.toSuccess("登录成功",map);
+            }else{
+                return Result.toFail(result);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Result.toFail(e.getMessage());
+        }
+    }
+
+    @PostMapping("authLoginToken")
+    public String authToken(HttpServletRequest request,@RequestBody JSONObject jsonObject){
+        String token = request.getHeader("Authorization");
+        String sysname = jsonObject.get("sysname") != null ? jsonObject.getString("sysname") : null;
+        try {
+            return Result.toSuccess("认证成功",userService.authLoginToken(token,sysname));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Result.toFail(e.getMessage());
+        }
+    }
+}

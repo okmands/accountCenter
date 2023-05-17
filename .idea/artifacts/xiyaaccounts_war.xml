@@ -1,0 +1,14 @@
+<component name="ArtifactManager">
+  <artifact type="war" name="xiyaaccounts:war">
+    <output-path>$PROJECT_DIR$/xiyaaccounts/target</output-path>
+    <properties id="maven-jee-properties">
+      <options>
+        <module>xiyaaccounts</module>
+        <packaging>war</packaging>
+      </options>
+    </properties>
+    <root id="archive" name="xiyaaccounts.war">
+      <element id="artifact" artifact-name="xiyaaccounts:war exploded" />
+    </root>
+  </artifact>
+</component>
